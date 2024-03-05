@@ -8,8 +8,11 @@ const Routes = () => {
         <Button>О приложении</Button>
       </Link>
       <br />
-      <Link to={'/quotes'}>
-        <Button>Котировки</Button>
+      <Link to={'/quotes-react-query'}>
+        <Button>Котировки на rect query</Button>
+      </Link>
+      <Link to={'/quotes-mobix'}>
+        <Button>Котировки на mobix</Button>
       </Link>
       <Outlet />
     </div>

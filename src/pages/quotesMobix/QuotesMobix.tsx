@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { useQuery } from 'react-query';
-import { Tab, Tabs, Typography, Box } from '@material-ui/core';
-import { fetchTableData } from '@/api';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { observer } from 'mobx-react-lite';
+import { Tab, Tabs, Typography, Box, Button } from '@material-ui/core';
 import { Notification, Table, Modal } from '@/Components';
-import { InitTableDataType } from '@/api/quotes/type';
+import quotesMob from '@/store/quotes';
 
 type PropsTypes = {
   value: number;
@@ -11,10 +10,7 @@ type PropsTypes = {
   children: React.ReactNode;
 };
 
-const initialState: InitTableDataType = {
-  quotesA: [],
-  quotesB: [],
-};
+type TimerType = null | NodeJS.Timeout;
 
 function TabPanel(props: PropsTypes) {
   const { children, value, index } = props;
@@ -34,45 +30,49 @@ function TabPanel(props: PropsTypes) {
 }
 
 const defaultValue = 0;
-const Quotes = () => {
+const QuotesMobLazy = observer(() => {
   const [value, setValue] = useState(defaultValue);
+  const [visible, setVisible] = useState(true);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [contentModal, setContentModal] = useState('');
-  const {
-    data: tableData,
-    error,
-    isFetching,
-  } = useQuery<InitTableDataType, Error>('tableDataNew', fetchTableData, {
-    initialData: initialState,
-    refetchInterval: 5000,
-    refetchOnWindowFocus: false,
-    enabled: !openModal,
-    keepPreviousData: true,
-  });
 
   const loadingRef = useRef(null);
-  useEffect(() => {
-    if (!isFetching && !loadingRef.current) {
-      loadingRef.current = true;
-    }
-  }, [loadingRef, isFetching]);
   const handleChange = (_: any, newValue: number) => {
     setValue(newValue);
   };
+
+  const wrapperFetchTableData = useCallback(async () => {
+    try {
+      await quotesMob.fetchTableData();
+      setNotificationMessage('');
+      setNotificationOpen(false);
+    } catch (err) {
+      setNotificationMessage(err.message);
+      console.error(err);
+      setNotificationOpen(true);
+    } finally {
+      if (visible) {
+        setVisible(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    let timerId: TimerType = null;
+    if (!openModal) {
+      timerId = setInterval(wrapperFetchTableData, 5000);
+    } else {
+      clearTimeout(timerId);
+    }
+    return () => clearTimeout(timerId);
+  }, [wrapperFetchTableData, notificationOpen, openModal]);
 
   const handleDataColumn = (content: string): void => {
     setContentModal(content);
     setOpenModal(true);
   };
-
-  useEffect(() => {
-    if (error) {
-      setNotificationMessage(error.message);
-    }
-    setNotificationOpen(!!error);
-  }, [error]);
 
   return (
     <div>
@@ -82,8 +82,9 @@ const Quotes = () => {
         content={contentModal}
         title="Статичные данные"
       />
-      <h2>Котировки на rect query</h2>
+      <h2>Котировки на mobix</h2>
       <Notification message={notificationMessage} open={notificationOpen} />
+      <Button onClick={quotesMob.fetchTableData}>fetchTableData</Button>
       <Tabs
         value={value}
         onChange={handleChange}
@@ -93,19 +94,19 @@ const Quotes = () => {
       </Tabs>
       <TabPanel value={value} index={0}>
         <Table
-          data={tableData.quotesA}
-          visible={isFetching && !loadingRef.current}
+          data={quotesMob.tableData.quotesA}
+          visible={false && !loadingRef.current}
           handleDataColumn={handleDataColumn}
         />
       </TabPanel>
       <TabPanel value={value} index={1}>
         <Table
-          data={tableData.quotesB}
-          visible={isFetching && !loadingRef.current}
+          data={quotesMob.tableData.quotesB}
+          visible={false && !loadingRef.current}
           handleDataColumn={handleDataColumn}
         />
       </TabPanel>
     </div>
   );
-};
-export default Quotes;
+});
+export default QuotesMobLazy;
